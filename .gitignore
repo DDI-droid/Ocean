@@ -174,5 +174,5 @@ cython_debug/
 .pypirc
 
 # My gitignore
-.pufferlib/
-.cleanrl/
+pufferlib/
+cleanrl/
