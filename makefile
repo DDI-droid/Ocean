@@ -1,4 +1,4 @@
-# Puffertank Makefile (using uv and per-repo branches)
+# Ocean Makefile (using uv and per-repo branches)
 
 SHELL := /bin/bash
 .ONESHELL:
@@ -9,7 +9,7 @@ REPO_BRANCHES := pufferlib:dev cleanrl:master
 INSTALL_BRANCHES := pufferlib:dev
 GIT_BASE      := https://github.com/DDI-droid
 ENV_NAME      := env
-PYTH_VERSION  := 3.11
+PYTH_VERSION  := 3.12
 
 # === Colors ===
 RESET  := \033[0m
@@ -60,9 +60,14 @@ install-internal:
 	@printf '%b\n' "$(GREEN)✓ Internal packages installed.$(RESET)"
 
 setup: env clone install-internal
-	@printf '%b\n' "$(GREEN)✓ Puffertank full setup complete!$(RESET)"
+	@printf '%b\n' "$(GREEN)✓ Ocean full setup complete!$(RESET)"
 
 clean:
 	@printf '%b\n' "$(RED)→ Cleaning up environment and subtrees...$(RESET)"
 	rm -rf $(ENV_NAME)
+	@for rb in $(REPO_BRANCHES); do \
+	  repo=$${rb%%:*}; \
+	  printf '%b   • Removing %s…%b\n' "$(YELLOW)" "$$repo" "$(RESET)"; \
+	  rm -rf $$repo; \
+	done
 	@printf '%b\n' "$(GREEN)✓ Cleaned.$(RESET)"
