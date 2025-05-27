@@ -1,3 +1,6 @@
+cython
+wheel
+setuptools==68.2.2
 tqdm
 numpy
 pandas
@@ -5,3 +8,14 @@ matplotlib
 scikit-learn
 seaborn
 scipy
+pyro-ppl
+rich
+heavyball
+neptune
+wandb
+gym
+gymnasium
+pettingzoo
+rich-argparse
+pynvml
+ninja

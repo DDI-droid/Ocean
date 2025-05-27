@@ -8,7 +8,7 @@ UV            := uv
 REPO_BRANCHES := pufferlib:dev cleanrl:master
 INSTALL_BRANCHES := pufferlib:dev
 GIT_BASE      := https://github.com/DDI-droid
-ENV_NAME      := env
+ENV_NAME      := oenv
 PYTH_VERSION  := 3.12
 
 # === Colors ===
@@ -19,7 +19,7 @@ YELLOW := \033[1;33m
 BLUE   := \033[1;34m
 
 # === Phony Targets ===
-.PHONY: all env clone install-internal clean help setup
+.PHONY: all env clone install-internal clean help setup clean-experiments clean-all
 
 help:
 	@printf '%b\n' ""
@@ -37,7 +37,7 @@ env:
 	@printf '%b\n' "$(BLUE)→ Creating/updating Python virtual environment with uv...$(RESET)"
 	$(UV) venv $(ENV_NAME) --python $(PYTH_VERSION)	
 	@printf '%b\n' "$(BLUE)→ Installing third-party dependencies...$(RESET)"
-	. $(ENV_NAME)/bin/activate && $(UV) pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+	. $(ENV_NAME)/bin/activate && $(UV) pip install torch==2.5.1+cu121 torchvision==0.20.1+cu121 torchaudio==2.5.1+cu121 --index-url https://download.pytorch.org/whl/cu121
 	. $(ENV_NAME)/bin/activate && $(UV) pip install -r requirements.txt
 	@printf '%b\n' "$(GREEN)✓ Environment setup complete.$(RESET)"
 
@@ -50,16 +50,16 @@ clone:
 	done
 	@printf '%b\n' "$(GREEN)✓ Cloned sub-repositories.$(RESET)"
 
-install-internal:
+build:
 	@printf '%b\n' "$(BLUE)→ Installing internal packages in editable mode...$(RESET)"
 	@for rb in $(INSTALL_BRANCHES); do \
 	  repo=$${rb%%:*}; \
 	  printf '%b   • Installing %s…%b\n' "$(YELLOW)" "$$repo" "$(RESET)"; \
-	  	. $(ENV_NAME)/bin/activate && $(UV) pip install --editable ./$$repo; \
+	  	. $(ENV_NAME)/bin/activate && cd $$repo && export TORCH_CUDA_ARCH_LIST="8.6" && $(UV) pip install --no-build-isolation -v .; \
 	done
 	@printf '%b\n' "$(GREEN)✓ Internal packages installed.$(RESET)"
 
-setup: env clone install-internal
+setup: env clone build
 	@printf '%b\n' "$(GREEN)✓ Ocean full setup complete!$(RESET)"
 
 clean:
@@ -71,3 +71,11 @@ clean:
 	  rm -rf $$repo; \
 	done
 	@printf '%b\n' "$(GREEN)✓ Cleaned.$(RESET)"
+
+clean-experiments:
+	@printf '%b\n' "$(RED)→ Cleaning up experiments...$(RESET)"
+	rm -rf experiments
+	@printf '%b\n' "$(GREEN)✓ Experiments cleaned.$(RESET)"
+
+clean-all: clean clean-experiments
+	@printf '%b\n' "$(GREEN)✓ All cleaned.$(RESET)"
