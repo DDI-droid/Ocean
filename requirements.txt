@@ -19,3 +19,10 @@ pettingzoo
 rich-argparse
 pynvml
 ninja
+imageio
+opencv-python
+einops
+GPUtil
+mediapy
+triton>=3
+ray

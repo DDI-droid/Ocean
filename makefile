@@ -5,10 +5,10 @@ SHELL := /bin/bash
 
 # === Configuration ===
 UV            := uv
-REPO_BRANCHES := pufferlib:dev cleanrl:master
-INSTALL_BRANCHES := pufferlib:dev
+REPO_BRANCHES := pufferlib:3.0 cleanrl:master
+INSTALL_BRANCHES := pufferlib:3.0
 GIT_BASE      := https://github.com/DDI-droid
-ENV_NAME      := oenv
+ENV_NAME      := env
 PYTH_VERSION  := 3.12
 
 # === Colors ===
@@ -55,7 +55,7 @@ build:
 	@for rb in $(INSTALL_BRANCHES); do \
 	  repo=$${rb%%:*}; \
 	  printf '%b   • Installing %s…%b\n' "$(YELLOW)" "$$repo" "$(RESET)"; \
-	  	. $(ENV_NAME)/bin/activate && cd $$repo && export TORCH_CUDA_ARCH_LIST="8.6" && $(UV) pip install --no-build-isolation -v .; \
+	  	. $(ENV_NAME)/bin/activate && cd $$repo && export TORCH_CUDA_ARCH_LIST="8.6" && $(UV) pip install --no-build-isolation -v .[train,atari]; \
 	done
 	@printf '%b\n' "$(GREEN)✓ Internal packages installed.$(RESET)"
 
