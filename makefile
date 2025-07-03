@@ -5,7 +5,7 @@ SHELL := /bin/bash
 
 # === Configuration ===
 UV            := uv
-REPO_BRANCHES := pufferlib:3.0 cleanrl:master
+REPO_BRANCHES := pufferlib:3.0
 INSTALL_BRANCHES := pufferlib:3.0
 GIT_BASE      := https://github.com/DDI-droid
 ENV_NAME      := env
