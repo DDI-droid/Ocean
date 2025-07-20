@@ -55,7 +55,7 @@ build:
 	@for rb in $(INSTALL_BRANCHES); do \
 	  repo=$${rb%%:*}; \
 	  printf '%b   • Installing %s…%b\n' "$(YELLOW)" "$$repo" "$(RESET)"; \
-	  	. $(ENV_NAME)/bin/activate && cd $$repo && export TORCH_CUDA_ARCH_LIST="8.6" && $(UV) pip install --no-build-isolation -v .[train,atari]; \
+	  	. $(ENV_NAME)/bin/activate && cd $$repo && export TORCH_CUDA_ARCH_LIST="8.6" && $(UV) pip install --no-build-isolation -v -e .[train,atari]; \
 	done
 	@printf '%b\n' "$(GREEN)✓ Internal packages installed.$(RESET)"
 
@@ -70,11 +70,13 @@ clean:
 	  printf '%b   • Removing %s…%b\n' "$(YELLOW)" "$$repo" "$(RESET)"; \
 	  rm -rf $$repo; \
 	done
+	rm -rf resources
 	@printf '%b\n' "$(GREEN)✓ Cleaned.$(RESET)"
 
 clean-experiments:
 	@printf '%b\n' "$(RED)→ Cleaning up experiments...$(RESET)"
 	rm -rf experiments
+	rm -rf .neptune
 	@printf '%b\n' "$(GREEN)✓ Experiments cleaned.$(RESET)"
 
 clean-all: clean clean-experiments
