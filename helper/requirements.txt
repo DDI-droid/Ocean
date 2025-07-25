@@ -1,0 +1,11 @@
+# core
+python-doctr>=0.9.0         # pulls the Hugging Face-hosted weights automatically :contentReference[oaicite:8]{index=8}
+torch>=2.2.0
+torchvision>=0.17.0         # docTR relies on standard TorchVision ops
+opencv-python-headless      # docTR image IO (no GUI deps)
+# utilities
+pdf2image                   # rasterise PDFs
+pillow
+numpy
+surya_ocr
+matplotlib
