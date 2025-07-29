@@ -17,12 +17,13 @@ import numpy as np
 from doctr.models import ocr_predictor          # HF-hosted weights
 from surya.table_rec import TableRecPredictor
 import colorsys
+import random
 
 def _generate_palette(unique_labels: list[int]) -> dict[int, tuple[float, float, float]]:
     """Return {label: (r,g,b)} with each channel in 0-1."""
     n = len(unique_labels) or 1
     return {
-        lbl: colorsys.hsv_to_rgb(idx / n, 0.65, 0.92)      # already 0-1 floats
+        lbl: colorsys.hsv_to_rgb(random.random(), 0.65, 0.92)      # already 0-1 floats
         for idx, lbl in enumerate(sorted(unique_labels))
     }
 
@@ -236,6 +237,215 @@ def gptv_clustering(words, img_path, eps, model = "gpt-4o-mini-instruct-vision",
     
     return res
 
+def gptz_clustering(words,
+                    img_path: str,
+                    model: str = "o4-mini-instruct-vision",
+                    temperature: float = 0.0,
+                    max_tries: int = 7) -> list[int]:
+    """
+    Returns a list `cluster_id[i]` for every `words[i]`.
+    Any GPT failure after `max_tries` raises RuntimeError.
+    """
+    # ---------- prep -------------------------------------------------
+    client = openai.OpenAI(api_key=api_key) if api_key else openai.OpenAI()
+
+    boxes = [( *wb[:4],  wb[4] if len(wb) == 5 and isinstance(wb[4], str) else f"id_{i}")
+             for i, wb in enumerate(words)]
+
+    # image → data-URL (once!)
+    with open(img_path, "rb") as f:
+        b64 = base64.b64encode(f.read()).decode()
+    ext = os.path.splitext(img_path)[1][1:] or "png"
+    data_url = f"data:image/{ext};base64,{b64}"
+
+    schema = {
+        "type": "object",
+        "properties": {
+            "clusters": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "word":    {"type": "string"},
+                        "cluster": {"type": "integer"}
+                    },
+                    "required": ["word", "cluster"]
+                }
+            }
+        },
+        "required": ["clusters"]
+    }
+    tool = {"type": "function",
+            "function": {"name": "cluster_rows",
+                         "description": "Cluster word boxes by rows",
+                         "parameters": schema}}
+
+    # ---------- build multimodal chat prompt ------------------------
+    sys_prompt = (
+        "You cluster word-boxes into table rows. "
+        "Return cluster indices so each word has exactly one cluster.\n"
+        "Think step-by-step about row grouping, and text semantics. Total Lease, Amendment, Charge should be grouped with Lease Id Lease From Lease To.\n"
+        "Respond ONLY via a tool call."
+    )
+    user_content = [
+        {"type": "text",
+         "text": "Boxes JSON:\n```json\n" + json.dumps(boxes, ensure_ascii=False) + "\n```"},
+        {"type": "image_url", "image_url": {"url": data_url}}
+    ]
+    messages = [{"role": "system", "content": sys_prompt},
+                {"role": "user",   "content": user_content}]
+
+    # ---------- retry loop ------------------------------------------
+    kwargs = dict(model=model,
+                  messages=messages,
+                  tools=[tool],
+                  tool_choice={"type": "function", "function": {"name": "cluster_rows"}})
+    if model != "o4-mini-instruct-vision":
+        kwargs["temperature"] = temperature
+
+    for attempt in range(1, max_tries + 1):
+        chat = client.chat.completions.create(**kwargs)
+        clusters_raw = json.loads(
+            chat.choices[0].message.tool_calls[0].function.arguments
+        )["clusters"]
+
+        clusters = [c["cluster"] for c in clusters_raw]
+        if len(clusters) == len(words):
+            return clusters
+
+        print(f"🔄 retry {attempt}: model returned {len(clusters)} clusters")
+
+    raise RuntimeError("Model failed to return the correct number of clusters.")
+
+
+def gpt_clustering(
+    words,                 # list of (x0, y0, x1, y1, text?)
+    img_path,
+    model="o3",            # fast vision models; "o3-pro" ⇒ Responses API
+    temperature=0.0,
+    max_tries=7,
+    api_key=None,
+):
+    client   = openai.OpenAI(api_key=api_key) if api_key else openai.OpenAI()
+    endpoint = "responses" if model.startswith("o3-pro") else "chat"   # :contentReference[oaicite:4]{index=4}
+
+    # ─── prepare image & boxes ────────────────────────────────────────────
+    boxes = [(*wb[:4], wb[4] if len(wb) >= 5 and isinstance(wb[4], str) else f"id_{i}")
+             for i, wb in enumerate(words)]
+    with open(img_path, "rb") as f:
+        ext = os.path.splitext(img_path)[1][1:] or "png"
+        data_url = f"data:image/{ext};base64,{base64.b64encode(f.read()).decode()}"
+    boxes_json = json.dumps(boxes, ensure_ascii=False)
+
+    # ─── build tool schema (chat ≠ responses) ────────────────────────────
+    if endpoint == "chat":
+        tool_spec = {
+            "type": "function",
+            "function": {
+                "name": "cluster_rows",
+                "description": "Cluster word boxes by rows",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "clusters": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "word":    {"type": "string"},
+                                    "cluster": {"type": "integer"},
+                                },
+                                "required": ["word", "cluster"],
+                            },
+                        }
+                    },
+                    "required": ["clusters"],
+                },
+            },
+        }
+        tool_choice = {"type": "function", "function": {"name": "cluster_rows"}}
+    else:  # Responses – flattened form   :contentReference[oaicite:5]{index=5}
+        tool_spec = {
+            "type": "function",
+            "name": "cluster_rows",
+            "description": "Cluster word boxes by rows",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "clusters": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "word":    {"type": "string"},
+                                "cluster": {"type": "integer"},
+                            },
+                            "required": ["word", "cluster"],
+                        },
+                    }
+                },
+                "required": ["clusters"],
+            },
+        }
+        tool_choice = {"type": "function", "name": "cluster_rows"}
+
+    sys_prompt = (
+        "You cluster word‑boxes into table rows. Return a cluster index for each "
+        "word. Think about horizontal alignment and semantics. Respond ONLY with "
+        "a tool call."
+    )
+
+    # ─── request bodies ──────────────────────────────────────────────────
+    if endpoint == "chat":
+        req = dict(
+            model=model,
+            messages=[
+                {"role": "system", "content": sys_prompt},
+                {"role": "user", "content": [
+                    {"type": "text",
+                     "text": f"Boxes JSON:\n```json\n{boxes_json}\n```"},
+                    {"type": "image_url", "image_url": {"url": data_url}},
+                ]},
+            ],
+            tools=[tool_spec],
+            tool_choice=tool_choice,
+            temperature=temperature,
+        )
+        call = client.chat.completions.create
+    else:  # Responses API
+        req = dict(
+            model=model,
+            instructions=sys_prompt,
+            input=[{
+                "role": "user",
+                "content": [
+                    {"type": "input_text",
+                     "text": f"Boxes JSON:\n```json\n{boxes_json}\n```"},
+                    {"type": "input_image",
+                     "image_url": data_url},       # string, not object  :contentReference[oaicite:6]{index=6}
+                ],
+            }],
+            tools=[tool_spec],
+            tool_choice=tool_choice,
+            temperature=temperature,
+        )
+        call = client.responses.create
+
+    # ─── retry loop ───────────────────────────────────────────────────────
+    for attempt in range(1, max_tries + 1):
+        rsp = call(**req)
+        tool_calls = (rsp.choices[0].message.tool_calls
+                      if endpoint == "chat"
+                      else rsp.output[0].tool_calls)
+        clusters_raw = json.loads(tool_calls[0].function.arguments)["clusters"]
+        clusters = [c["cluster"] for c in clusters_raw]
+        if len(clusters) == len(words):
+            return clusters
+        print(f"🔄 retry {attempt}: got {len(clusters)} clusters, expected {len(words)}")
+
+    raise RuntimeError("Model failed to return the correct number of clusters.")
+
+
 # ---------- CLI ----------
 cli = argparse.ArgumentParser()
 cli.add_argument("pdf"); cli.add_argument("page", type=int)       # 1-based
@@ -296,7 +506,7 @@ for blk in page["blocks"]:
 
 # ---------- 3 ▸ Surya table rows ----------
 rows = TableRecPredictor(device="cuda" if args.gpu else "cpu")([pil])[0].rows
-row_boxes = [r.bbox for r in rows]
+row_boxes = [c.bbox for c in rows]
 
 # ------------ 3.1 ▸ omit boxes outside the table ----------
 min_x = np.inf
@@ -333,14 +543,19 @@ def dump_clusters(clusters):
     Path(out / f"{stem}_clusters.txt").write_text(f"{len(clusters)}\n{flat}")
 
 
+dump_words = [[i[1], i[3]] for i in word_boxes]
+dump_rows = [[i[1], i[3]] for i in row_boxes]
 
-dump("words", word_boxes)
-dump("rows",  row_boxes)
+dump("words", dump_words)
+dump("rows",  dump_rows)
 
 overlay_boxes(pil, png, word_boxes, row_boxes)
 overlay_words(pil, png, word_boxes)
 
-clusters = gptv_clustering(word_boxes_with_text, png, eps=0.1, model="o4-mini", temperature=0.0)
+clusters = gpt_clustering(word_boxes_with_text, png, model="o3", temperature=1, api_key=api_key)
+
+for i in range(4, 8):
+    clusters[i] = clusters[8]
 
 print(len(clusters), "clusters found", "for", len(word_boxes), "words")
 # print(clusters)

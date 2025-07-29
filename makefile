@@ -5,8 +5,8 @@ SHELL := /bin/bash
 
 # === Configuration ===
 UV            := uv
-REPO_BRANCHES := pufferlib:3.0
-INSTALL_BRANCHES := pufferlib:3.0
+REPO_BRANCHES := pufferlib:ocr_3.0
+INSTALL_BRANCHES := pufferlib:ocr_3.0
 GIT_BASE      := https://github.com/DDI-droid
 ENV_NAME      := env
 PYTH_VERSION  := 3.12

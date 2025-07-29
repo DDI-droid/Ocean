@@ -9,3 +9,4 @@ pillow
 numpy
 surya_ocr
 matplotlib
+openai
