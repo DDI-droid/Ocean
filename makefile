@@ -55,7 +55,7 @@ build:
 	@for rb in $(INSTALL_BRANCHES); do \
 	  repo=$${rb%%:*}; \
 	  printf '%b   • Installing %s…%b\n' "$(YELLOW)" "$$repo" "$(RESET)"; \
-	  	. $(ENV_NAME)/bin/activate && cd $$repo && export TORCH_CUDA_ARCH_LIST="8.6" && $(UV) pip install --no-build-isolation -v -e .[train,atari]; \
+	  	. $(ENV_NAME)/bin/activate && cd $$repo && export TORCH_CUDA_ARCH_LIST="8.6" && $(UV) pip install --no-build-isolation -v -e .[atari]; \
 	done
 	@printf '%b\n' "$(GREEN)✓ Internal packages installed.$(RESET)"
 
